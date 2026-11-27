@@ -1,10 +1,12 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.session import get_db
-from app.models.user import User
+from app.models.audit_log import AuditOutcome
+from app.models.user import Role, User
+from app.services.audit import log_event
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -32,3 +34,32 @@ def get_current_user(
     if user is None or not user.is_active:
         raise _unauthorized()
     return user
+
+
+def require_role(*allowed: Role):
+    """Authorization: build a dependency that only lets the listed roles through."""
+
+    def checker(
+        request: Request,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> User:
+        if current_user.role not in allowed:
+            # Security: every denied access is written to the audit log.
+            log_event(
+                db,
+                action="authz.denied",
+                outcome=AuditOutcome.DENIED,
+                request=request,
+                user_id=current_user.id,
+                target_type="endpoint",
+                target_id=request.url.path[:100],
+            )
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return current_user
+
+    return checker
+
+
+require_admin = require_role(Role.ADMIN)
+require_instructor_or_admin = require_role(Role.INSTRUCTOR, Role.ADMIN)
