@@ -26,3 +26,20 @@ Docker-based sandboxing, WebSockets.
 | `docs/` | Design documents |
 
 Setup instructions will be added as the project grows.
+
+
+## Quick start (local, Phase 1)
+
+Requires Docker Desktop, Python 3.12 and Git (developed on WSL2 Ubuntu).
+
+```bash
+cp .env.example .env            # then set POSTGRES_PASSWORD, DATABASE_URL and JWT_SECRET_KEY
+docker compose up -d            # PostgreSQL on localhost:5433
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head            # create the tables
+python -m app.scripts.create_admin you@example.com
+uvicorn app.main:app --reload   # API docs at http://localhost:8000/docs
+pytest -v
+```
